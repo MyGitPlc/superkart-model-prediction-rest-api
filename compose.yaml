@@ -1,0 +1,41 @@
+services:
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    image: superkart-backend
+
+    ports:
+      - "7860:7860"
+
+    restart: unless-stopped
+
+    networks:
+      - superkart-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
+    image: superkart-frontend
+
+    ports:
+      - "8501:8501"
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    depends_on:
+      - backend
+
+    restart: unless-stopped
+
+    networks:
+      - superkart-network
+
+networks:
+  superkart-network:
+    driver: bridge
