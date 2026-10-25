@@ -22,45 +22,59 @@ def home():
 # Define an endpoint for single property prediction (POST request)
 @superkart_model_api.post('/v1/predict')
 def predict_sales_revenue():
-    """
-    This function handles POST requests to the '/v1/predict' endpoint.
-    It expects a JSON payload containing property details and returns
-    the predicted rental price as a JSON response.
-    """
-    # Get the JSON data from the request body
+
     product_data = request.get_json()
 
-    # Extract relevant features from the JSON data
-    sample = {
-        'Product_Weight': product_data['Product_Weight'],
-        'Product_Sugar_Content': product_data['Product_Sugar_Content'],
-        'Product_Allocated_Area': product_data['Product_Allocated_Area'],
-        'Product_MRP': product_data['Product_MRP'],
-        'Store_Size': product_data['Store_Size'],
-        'Store_Location_City_Type': product_data['Store_Location_City_Type'],
-        'Store_type': product_data['Store_type'],
-        'Product_Id_char': product_data['Product_Id_char'],
-        'Store_Age_Years': product_data['Store_Age_Years'],
-        'Product_Type_Category': product_data['Product_Type_Category']
-     }
+    required_features = [
+        'Product_Weight',
+        'Product_Allocated_Area',
+        'Product_MRP',
+        'Store_Establishment_Year',
+        'Product_Sugar_Content',
+        'Product_Type',
+        'Store_Size',
+        'Store_Location_City_Type',
+        'Store_Type'
+    ]
 
-    # Convert the extracted data into a Pandas DataFrame
+    if not isinstance(product_data, dict):
+        return jsonify({
+            'error': 'A JSON object containing product features is required.'
+        }), 400
+
+    missing_features = [
+        feature for feature in required_features
+        if feature not in product_data
+    ]
+
+    if missing_features:
+        return jsonify({
+            'error': 'Missing required features',
+            'missing_features': missing_features
+        }), 400
+
+    sample = {
+        feature: product_data[feature]
+        for feature in required_features
+    }
+
     input_data = pd.DataFrame([sample])
 
-    # Make prediction (get log_price)
-    predicted_log_sales = model.predict(input_data)[0]
+    # Predict sales revenue directly
+    raw_prediction = float(model.predict(input_data)[0])
 
-    # Calculate actual price
-    predicted_sales = np.exp(predicted_log_sales)
+    # Ensure the model returned a valid number
+    if not np.isfinite(raw_prediction):
+        return jsonify({
+            'error': 'Model generated an invalid prediction.'
+        }), 500
 
-    # Convert predicted_price to Python float
-    predicted_price = round(float(predicted_price), 2)
-    # The conversion above is needed as we convert the model prediction (log sales) to actual sales using np.exp, which returns predictions as NumPy float32 values.
-    # When we send this value directly within a JSON response, Flask's jsonify function encounters a datatype error
+    # Round predicted sales to two decimal places
+    predicted_sales = round(raw_prediction, 2)
 
-    # Return the actual price
-    return jsonify({'Predicted Sales (in dollars)': predicted_sales})
-
+    return jsonify({
+        'Predicted Sales (in dollars)': predicted_sales
+})
 
 # Define an endpoint for batch prediction (POST request)
 @superkart_model_api.post('/v1/predictbatch')
