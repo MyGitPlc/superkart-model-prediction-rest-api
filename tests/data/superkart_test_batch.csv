@@ -1,0 +1,4 @@
+Product_Weight,Product_Allocated_Area,Product_MRP,Store_Establishment_Year,Product_Sugar_Content,Product_Type,Store_Size,Store_Location_City_Type,Store_Type
+10.0,0.10,100.0,2010,Low Sugar,Dairy,Medium,Tier 1,Supermarket Type1
+12.5,0.15,150.0,2015,Regular,Snack Foods,High,Tier 2,Departmental Store
+8.0,0.08,80.0,2005,No Sugar,Soft Drinks,Small,Tier 3,Food Mart
