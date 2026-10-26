@@ -30,19 +30,20 @@ st.write(
 
 
 # ---------------------------------------------------------
-# Required Features
+# Required Model Features
 # ---------------------------------------------------------
 
 REQUIRED_FEATURES = [
     "Product_Weight",
+    "Product_Sugar_Content",
     "Product_Allocated_Area",
     "Product_MRP",
-    "Store_Establishment_Year",
-    "Product_Sugar_Content",
-    "Product_Type",
     "Store_Size",
     "Store_Location_City_Type",
-    "Store_Type"
+    "Store_Type",
+    "Product_Id_char",
+    "Store_Age_Years",
+    "Product_Type_Category"
 ]
 
 
@@ -61,29 +62,30 @@ with st.form("single_prediction_form"):
         Product_Weight = st.number_input(
             "Product Weight",
             min_value=0.0,
-            value=10.0,
+            value=12.66,
             step=0.1
         )
 
         Product_Allocated_Area = st.number_input(
             "Product Allocated Area",
             min_value=0.0,
-            value=0.1,
-            step=0.01
+            value=0.027,
+            step=0.001,
+            format="%.3f"
         )
 
         Product_MRP = st.number_input(
             "Product MRP",
             min_value=0.0,
-            value=100.0,
-            step=0.1
+            value=117.08,
+            step=0.01
         )
 
-        Store_Establishment_Year = st.number_input(
-            "Store Establishment Year",
-            min_value=1900,
-            max_value=2026,
-            value=2010,
+        Store_Age_Years = st.number_input(
+            "Store Age (Years)",
+            min_value=0,
+            max_value=150,
+            value=16,
             step=1
         )
 
@@ -92,32 +94,26 @@ with st.form("single_prediction_form"):
             [
                 "Low Sugar",
                 "No Sugar",
-                "Regular",
-                "reg"
+                "Regular"
             ]
         )
 
     with col2:
 
-        Product_Type = st.selectbox(
-            "Product Type",
+        Product_Id_char = st.selectbox(
+            "Product ID Category",
             [
-                "Baking Goods",
-                "Breads",
-                "Breakfast",
-                "Canned",
-                "Dairy",
-                "Frozen Foods",
-                "Fruits and Vegetables",
-                "Hard Drinks",
-                "Health and Hygiene",
-                "Household",
-                "Meat",
-                "Others",
-                "Seafood",
-                "Snack Foods",
-                "Soft Drinks",
-                "Starchy Foods"
+                "FD",
+                "DR",
+                "NC"
+            ]
+        )
+
+        Product_Type_Category = st.selectbox(
+            "Product Type Category",
+            [
+                "Non Perishables",
+                "Perishables"
             ]
         )
 
@@ -127,7 +123,8 @@ with st.form("single_prediction_form"):
                 "High",
                 "Medium",
                 "Small"
-            ]
+            ],
+            index=1
         )
 
         Store_Location_City_Type = st.selectbox(
@@ -136,7 +133,8 @@ with st.form("single_prediction_form"):
                 "Tier 1",
                 "Tier 2",
                 "Tier 3"
-            ]
+            ],
+            index=1
         )
 
         Store_Type = st.selectbox(
@@ -145,8 +143,10 @@ with st.form("single_prediction_form"):
                 "Departmental Store",
                 "Food Mart",
                 "Supermarket Type1",
-                "Supermarket Type2"
-            ]
+                "Supermarket Type2",
+                "Supermarket Type3"
+            ],
+            index=3
         )
 
     predict_button = st.form_submit_button(
@@ -163,14 +163,15 @@ if predict_button:
 
     payload = {
         "Product_Weight": Product_Weight,
+        "Product_Sugar_Content": Product_Sugar_Content,
         "Product_Allocated_Area": Product_Allocated_Area,
         "Product_MRP": Product_MRP,
-        "Store_Establishment_Year": Store_Establishment_Year,
-        "Product_Sugar_Content": Product_Sugar_Content,
-        "Product_Type": Product_Type,
         "Store_Size": Store_Size,
         "Store_Location_City_Type": Store_Location_City_Type,
-        "Store_Type": Store_Type
+        "Store_Type": Store_Type,
+        "Product_Id_char": Product_Id_char,
+        "Store_Age_Years": Store_Age_Years,
+        "Product_Type_Category": Product_Type_Category
     }
 
     try:
@@ -189,7 +190,9 @@ if predict_button:
                 "Predicted Sales (in dollars)"
             ]
 
-            st.success("Prediction completed successfully!")
+            st.success(
+                "Prediction completed successfully!"
+            )
 
             st.metric(
                 label="Predicted Sales Revenue",
@@ -226,8 +229,8 @@ st.divider()
 st.header("Batch Prediction")
 
 st.write(
-    "Upload a CSV file containing multiple products "
-    "to generate sales revenue predictions."
+    "Upload a CSV file containing the 10 required "
+    "model features to generate sales revenue predictions."
 )
 
 
@@ -237,17 +240,20 @@ st.write(
 
 template_data = pd.DataFrame([
     {
-        "Product_Weight": 10.0,
-        "Product_Allocated_Area": 0.1,
-        "Product_MRP": 100.0,
-        "Store_Establishment_Year": 2010,
+        "Product_Weight": 12.66,
         "Product_Sugar_Content": "Low Sugar",
-        "Product_Type": "Dairy",
+        "Product_Allocated_Area": 0.027,
+        "Product_MRP": 117.08,
         "Store_Size": "Medium",
-        "Store_Location_City_Type": "Tier 1",
-        "Store_Type": "Supermarket Type1"
+        "Store_Location_City_Type": "Tier 2",
+        "Store_Type": "Supermarket Type2",
+        "Product_Id_char": "FD",
+        "Store_Age_Years": 16,
+        "Product_Type_Category": "Non Perishables"
     }
 ])
+
+template_data = template_data[REQUIRED_FEATURES]
 
 st.download_button(
     label="Download Sample CSV Template",
@@ -329,9 +335,23 @@ if uploaded_file is not None:
 
                     if response.status_code == 200:
 
-                        results = pd.read_csv(
-                            io.BytesIO(response.content)
-                        )
+                        # API returns a dictionary:
+                        # {"0": 2945.54, "1": 4810.87}
+
+                        predictions = response.json()
+
+                        # Preserve the order of uploaded rows
+                        prediction_values = [
+                            predictions[str(index)]
+                            for index in range(len(preview_data))
+                        ]
+
+                        # Append predictions to uploaded data
+                        results = preview_data.copy()
+
+                        results[
+                            "Predicted_Product_Store_Sales_Total"
+                        ] = prediction_values
 
                         st.success(
                             "Batch predictions completed successfully!"
@@ -348,9 +368,14 @@ if uploaded_file is not None:
                             f"Total predictions generated: {len(results)}"
                         )
 
+                        # Convert the results to CSV
+                        csv_results = results.to_csv(
+                            index=False
+                        ).encode("utf-8")
+
                         st.download_button(
                             label="Download Prediction Results",
-                            data=response.content,
+                            data=csv_results,
                             file_name="superkart_batch_predictions.csv",
                             mime="text/csv"
                         )
@@ -375,7 +400,13 @@ if uploaded_file is not None:
                         f"Unable to connect to batch prediction API: {error}"
                     )
 
-    except Exception as error:
+                except (ValueError, KeyError, TypeError) as error:
+
+                    st.error(
+                        f"Unable to process prediction results: {error}"
+                    )
+
+    except (pd.errors.ParserError, UnicodeError, ValueError) as error:
 
         st.error(
             f"Unable to read uploaded CSV file: {error}"
