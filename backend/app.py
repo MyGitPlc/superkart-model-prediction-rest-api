@@ -1,24 +1,20 @@
 # Import necessary libraries
-import io
-import numpy as np
+import os
+
 import joblib
+import numpy as np
 import pandas as pd
 
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify
 
 
 # ---------------------------------------------------------
 # Flask Application
 # ---------------------------------------------------------
 
-superkart_model_api = Flask("SuperKart Sales Revenue Predictor")
-
-
-# ---------------------------------------------------------
-# Load Trained Model
-# ---------------------------------------------------------
-
-model = joblib.load("superkart_model.joblib")
+superkart_model_api = Flask(
+    "SuperKart Sales Revenue Predictor"
+)
 
 
 # ---------------------------------------------------------
@@ -27,15 +23,35 @@ model = joblib.load("superkart_model.joblib")
 
 REQUIRED_FEATURES = [
     "Product_Weight",
+    "Product_Sugar_Content",
     "Product_Allocated_Area",
     "Product_MRP",
-    "Store_Establishment_Year",
-    "Product_Sugar_Content",
-    "Product_Type",
     "Store_Size",
     "Store_Location_City_Type",
-    "Store_Type"
+    "Store_Type",
+    "Product_Id_char",
+    "Store_Age_Years",
+    "Product_Type_Category"
 ]
+
+
+# ---------------------------------------------------------
+# Load Trained Model
+# ---------------------------------------------------------
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+MODEL_PATH = os.path.join(
+    BASE_DIR,
+    "superkart_model_v2.joblib"
+)
+
+model = joblib.load(MODEL_PATH)
+
+if model.feature_names_in_.tolist() != REQUIRED_FEATURES:
+    raise RuntimeError(
+        "Model feature schema does not match API schema."
+    )
 
 
 # ---------------------------------------------------------
@@ -47,27 +63,7 @@ VALID_CATEGORIES = {
     "Product_Sugar_Content": [
         "Low Sugar",
         "No Sugar",
-        "Regular",
-        "reg"
-    ],
-
-    "Product_Type": [
-        "Baking Goods",
-        "Breads",
-        "Breakfast",
-        "Canned",
-        "Dairy",
-        "Frozen Foods",
-        "Fruits and Vegetables",
-        "Hard Drinks",
-        "Health and Hygiene",
-        "Household",
-        "Meat",
-        "Others",
-        "Seafood",
-        "Snack Foods",
-        "Soft Drinks",
-        "Starchy Foods"
+        "Regular"
     ],
 
     "Store_Size": [
@@ -86,7 +82,19 @@ VALID_CATEGORIES = {
         "Departmental Store",
         "Food Mart",
         "Supermarket Type1",
-        "Supermarket Type2"
+        "Supermarket Type2",
+        "Supermarket Type3"
+    ],
+
+    "Product_Id_char": [
+        "FD",
+        "DR",
+        "NC"
+    ],
+
+    "Product_Type_Category": [
+        "Perishables",
+        "Non Perishables"
     ]
 }
 
@@ -95,7 +103,7 @@ NUMERIC_FEATURES = [
     "Product_Weight",
     "Product_Allocated_Area",
     "Product_MRP",
-    "Store_Establishment_Year"
+    "Store_Age_Years"
 ]
 
 
@@ -133,10 +141,18 @@ def validate_input(df):
         if converted.isnull().any():
             return f"Invalid numeric values in {column}."
 
-        if not np.isfinite(converted.to_numpy(dtype=float)).all():
+        if not np.isfinite(
+            converted.to_numpy(dtype=float)
+        ).all():
             return f"Non-finite numeric values in {column}."
 
         df[column] = converted
+
+    # Normalize legacy sugar-content spelling
+    df["Product_Sugar_Content"] = (
+        df["Product_Sugar_Content"]
+        .replace({"reg": "Regular"})
+    )
 
     for column, valid_values in VALID_CATEGORIES.items():
 
@@ -252,16 +268,16 @@ def predict_sales_batch():
 
         input_data = pd.read_csv(uploaded_file)
 
-    except (pd.errors.ParserError, UnicodeError, ValueError):
-
-        return jsonify({
-            "error": "Unable to read CSV file."
-        }), 400
-
     except pd.errors.EmptyDataError:
 
         return jsonify({
             "error": "Uploaded CSV file is empty."
+        }), 400
+
+    except (pd.errors.ParserError, UnicodeError, ValueError):
+
+        return jsonify({
+            "error": "Unable to read CSV file."
         }), 400
 
     validation_error = validate_input(input_data)
@@ -274,40 +290,20 @@ def predict_sales_batch():
 
     try:
 
-        # Select only the nine features used during training
         model_input = input_data[REQUIRED_FEATURES]
 
-        # Predict actual sales revenue directly
         predictions = model.predict(model_input)
 
         if not np.isfinite(predictions).all():
             raise ValueError("Non-finite model predictions.")
 
-        # Preserve original CSV columns
-        results = input_data.copy()
+        # Return predictions indexed by row
+        results = {
+            str(index): round(float(prediction), 2)
+            for index, prediction in enumerate(predictions)
+        }
 
-        # Add predicted sales
-        results["Predicted_Product_Store_Sales_Total"] = [
-            round(float(prediction), 2)
-            for prediction in predictions
-        ]
-
-        # Generate CSV in memory
-        output = io.BytesIO()
-
-        results.to_csv(
-            output,
-            index=False
-        )
-
-        output.seek(0)
-
-        return send_file(
-            output,
-            mimetype="text/csv",
-            as_attachment=True,
-            download_name="superkart_batch_predictions.csv"
-        )
+        return jsonify(results)
 
     except Exception:
 
