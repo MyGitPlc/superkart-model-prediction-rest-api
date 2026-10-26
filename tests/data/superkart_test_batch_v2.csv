@@ -1,0 +1,4 @@
+Product_Weight,Product_Sugar_Content,Product_Allocated_Area,Product_MRP,Store_Size,Store_Location_City_Type,Store_Type,Product_Id_char,Store_Age_Years,Product_Type_Category
+10.0,Low Sugar,0.10,100.0,Medium,Tier 1,Supermarket Type1,FD,15,Perishables
+12.5,Regular,0.15,150.0,High,Tier 2,Departmental Store,FD,10,Non Perishables
+8.0,No Sugar,0.08,80.0,Small,Tier 3,Food Mart,DR,20,Non Perishables
